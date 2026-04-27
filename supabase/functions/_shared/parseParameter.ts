@@ -3,7 +3,7 @@ import {
   ParameterOption,
   ParameterRange,
   ParameterType,
-} from '@shared/types.ts';
+} from '../../../shared/types.ts';
 
 export default function parseParameters(script: string): Parameter[] {
   // Limit the script to the upper part of the file. We don't want to parse the

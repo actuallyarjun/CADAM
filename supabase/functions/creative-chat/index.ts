@@ -9,12 +9,12 @@ import {
   Prompt,
   MeshData,
   CoreMessage,
-} from '@shared/types.ts';
+} from '../../../shared/types.ts';
 import {
   getAnonSupabaseClient,
   SupabaseClient,
 } from '../_shared/supabaseClient.ts';
-import Tree from '@shared/Tree.ts';
+import Tree from '../../../shared/Tree.ts';
 import { initSentry, logError } from '../_shared/sentry.ts';
 import { billing, BillingClientError } from '../_shared/billingClient.ts';
 import {

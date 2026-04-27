@@ -160,17 +160,46 @@ export type CancelSubscriptionResult =
   | { canceled: true }
   | { canceled: false; reason: 'no_subscription' | 'already_canceled' };
 
+const LOCAL_STATUS: BillingStatus = {
+  user: { hasTrialed: true },
+  subscription: { level: 'pro', status: 'active', currentPeriodEnd: null },
+  tokens: { free: 0, subscription: 999999, purchased: 0, total: 999999 },
+};
+
+const isLocal = () => Deno.env.get('ENVIRONMENT') === 'local';
+
 export const billing = {
   getStatus: (email: string) =>
-    call<BillingStatus>('GET', `/v1/users/${enc(email)}/status`),
+    isLocal()
+      ? Promise.resolve(LOCAL_STATUS)
+      : call<BillingStatus>('GET', `/v1/users/${enc(email)}/status`),
 
   consume: (email: string, body: ConsumeBody) =>
-    call<ConsumeResult>('POST', `/v1/users/${enc(email)}/consume`, body, {
-      allowStatus: [422],
-    }),
+    isLocal()
+      ? Promise.resolve<ConsumeResult>({
+          ok: true,
+          tokensDeducted: body.tokens,
+          freeBalance: 0,
+          subscriptionBalance: 999999,
+          purchasedBalance: 0,
+          totalBalance: 999999,
+        })
+      : call<ConsumeResult>('POST', `/v1/users/${enc(email)}/consume`, body, {
+          allowStatus: [422],
+        }),
 
   refund: (email: string, body: RefundBody) =>
-    call<RefundResult>('POST', `/v1/users/${enc(email)}/refund`, body),
+    isLocal()
+      ? Promise.resolve<RefundResult>({
+          ok: true,
+          tokensRefunded: body.tokens,
+          source: 'subscription',
+          freeBalance: 0,
+          subscriptionBalance: 999999,
+          purchasedBalance: 0,
+          totalBalance: 999999,
+        })
+      : call<RefundResult>('POST', `/v1/users/${enc(email)}/refund`, body),
 
   createCheckout: (email: string, body: CheckoutBody) =>
     call<{ url: string }>('POST', `/v1/users/${enc(email)}/checkout`, body),

@@ -25,6 +25,16 @@ Deno.serve(async (req) => {
     });
   }
 
+  if (Deno.env.get('ENVIRONMENT') === 'local') {
+    return new Response(JSON.stringify({
+      user: { hasTrialed: true },
+      subscription: { level: 'pro', status: 'active', currentPeriodEnd: null },
+      tokens: { free: 0, subscription: 999999, purchased: 0, total: 999999 },
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const status = await billing.getStatus(userData.user.email);
     return new Response(JSON.stringify(status), {

@@ -8,7 +8,7 @@ import { Anthropic } from 'npm:@anthropic-ai/sdk';
 import { corsHeaders } from '../_shared/cors.ts';
 import 'jsr:@std/dotenv/load';
 import { getAnonSupabaseClient } from '../_shared/supabaseClient.ts';
-import { Content } from '@shared/types.ts';
+import { Content } from '../../../shared/types.ts';
 import { formatCreativeUserMessage } from '../_shared/messageUtils.ts';
 
 const TITLE_SYSTEM_PROMPT = `You are a helpful assistant that generates concise, descriptive titles for conversation threads based on the first message in the thread.

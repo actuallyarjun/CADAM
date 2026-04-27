@@ -6,9 +6,9 @@ import {
   CoreMessage,
   ParametricArtifact,
   ToolCall,
-} from '@shared/types.ts';
+} from '../../../shared/types.ts';
 import { getAnonSupabaseClient } from '../_shared/supabaseClient.ts';
-import Tree from '@shared/Tree.ts';
+import Tree from '../../../shared/Tree.ts';
 import parseParameters from '../_shared/parseParameter.ts';
 import { formatUserMessage } from '../_shared/messageUtils.ts';
 import { corsHeaders } from '../_shared/cors.ts';

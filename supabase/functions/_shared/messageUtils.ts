@@ -1,4 +1,4 @@
-import { CoreMessage } from '@shared/types.ts';
+import { CoreMessage } from '../../../shared/types.ts';
 import { SupabaseClient } from './supabaseClient.ts';
 import { ContentBlockParam } from 'npm:@anthropic-ai/sdk/resources/messages';
 

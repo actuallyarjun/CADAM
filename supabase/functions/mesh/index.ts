@@ -11,7 +11,7 @@ import {
   INSTRUCTIONS_3D as instructions3D,
   type GptImageQuality,
 } from '../_shared/imageGen.ts';
-import { Model, MeshFileType } from '@shared/types.ts';
+import { Model, MeshFileType } from '../../../shared/types.ts';
 import {
   getServiceRoleSupabaseClient,
   SupabaseClient,
