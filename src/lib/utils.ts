@@ -235,7 +235,7 @@ export function getInitials(fullName: string | null) {
   return 'U';
 }
 
-export const PARAMETRIC_MODELS: ModelConfig[] = [
+const BASE_PARAMETRIC_MODELS: ModelConfig[] = [
   {
     id: 'google/gemini-3.1-pro-preview',
     name: 'Gemini 3.1 Pro',
@@ -273,6 +273,26 @@ export const PARAMETRIC_MODELS: ModelConfig[] = [
     supportsVision: false,
   },
 ];
+
+function getLocalLlmConfig(): ModelConfig | null {
+  if (import.meta.env.VITE_LOCAL_LLM_ENABLED !== 'true') return null;
+  return {
+    id: 'local/llm',
+    name: import.meta.env.VITE_LOCAL_LLM_NAME || 'Local LLM',
+    description:
+      import.meta.env.VITE_LOCAL_LLM_DESCRIPTION || 'Local inference model',
+    provider: 'Local',
+    supportsTools: import.meta.env.VITE_LOCAL_LLM_SUPPORTS_TOOLS !== 'false',
+    supportsThinking:
+      import.meta.env.VITE_LOCAL_LLM_SUPPORTS_THINKING === 'true',
+    supportsVision: import.meta.env.VITE_LOCAL_LLM_SUPPORTS_VISION === 'true',
+  };
+}
+
+export const PARAMETRIC_MODELS: ModelConfig[] = (() => {
+  const local = getLocalLlmConfig();
+  return local ? [local, ...BASE_PARAMETRIC_MODELS] : BASE_PARAMETRIC_MODELS;
+})();
 
 export const CREATIVE_MODELS: ModelConfig[] = [
   {

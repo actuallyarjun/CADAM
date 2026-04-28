@@ -24,6 +24,35 @@ initSentry();
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY') ?? '';
 
+// Local LLM configuration (overrides OpenRouter only when user selects local/llm)
+const LOCAL_LLM_URL = Deno.env.get('LOCAL_LLM_URL') ?? '';
+const LOCAL_LLM_MODEL = Deno.env.get('LOCAL_LLM_MODEL') ?? '';
+const LOCAL_LLM_API_KEY = Deno.env.get('LOCAL_LLM_API_KEY') ?? 'ollama';
+const IS_LOCAL_ENV = Deno.env.get('ENVIRONMENT') === 'local';
+
+function useLocalLlm(model: string): boolean {
+  return IS_LOCAL_ENV && LOCAL_LLM_URL !== '' && model === 'local/llm';
+}
+
+function getLlmUrl(model: string) {
+  return useLocalLlm(model) ? LOCAL_LLM_URL : OPENROUTER_API_URL;
+}
+
+function getLlmHeaders(model: string): Record<string, string> {
+  if (useLocalLlm(model)) {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${LOCAL_LLM_API_KEY}`,
+    };
+  }
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+    'HTTP-Referer': 'https://adam-cad.com',
+    'X-Title': 'Adam CAD',
+  };
+}
+
 // Models whose OpenRouter listing serves at least one provider that does NOT
 // support tool calling. For these we set `provider: { require_parameters: true }`
 // on the agent (tools-bearing) call so OpenRouter excludes the tool-incompatible
@@ -214,6 +243,7 @@ interface OpenRouterRequest {
 
 async function generateTitleFromMessages(
   messagesToSend: OpenAIMessage[],
+  model: string,
 ): Promise<string> {
   try {
     const titleSystemPrompt = `Generate a short title for a 3D object. Rules:
@@ -223,16 +253,11 @@ async function generateTitleFromMessages(
 - No quotes or special formatting
 - Examples: "Coffee Mug", "Gear Assembly", "Phone Stand"`;
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(getLlmUrl(model), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://adam-cad.com',
-        'X-Title': 'Adam CAD',
-      },
+      headers: getLlmHeaders(model),
       body: JSON.stringify({
-        model: 'anthropic/claude-haiku-4.5',
+        model: useLocalLlm(model) ? (LOCAL_LLM_MODEL || 'local-model') : 'anthropic/claude-haiku-4.5',
         max_tokens: 30,
         messages: [
           { role: 'system', content: titleSystemPrompt },
@@ -660,7 +685,7 @@ Deno.serve(async (req) => {
 
     // Prepare request body
     const requestBody: OpenRouterRequest = {
-      model,
+      model: useLocalLlm(model) ? (LOCAL_LLM_MODEL || 'local-model') : model,
       messages: [
         { role: 'system', content: PARAMETRIC_AGENT_PROMPT },
         ...messagesToSend,
@@ -672,13 +697,13 @@ Deno.serve(async (req) => {
 
     // Constrain provider routing only when the model has providers that don't
     // support tool calling — otherwise we'd needlessly narrow the pool.
-    if (REQUIRES_TOOL_CAPABLE_PROVIDER.has(model)) {
+    if (!useLocalLlm(model) && REQUIRES_TOOL_CAPABLE_PROVIDER.has(model)) {
       requestBody.provider = { require_parameters: true };
     }
 
     // Add reasoning/thinking parameter if requested and supported
     // OpenRouter uses a unified 'reasoning' parameter
-    if (thinking) {
+    if (!useLocalLlm(model) && thinking) {
       requestBody.reasoning = {
         max_tokens: 12000,
       };
@@ -686,14 +711,9 @@ Deno.serve(async (req) => {
       requestBody.max_tokens = 20000;
     }
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(getLlmUrl(model), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://adam-cad.com',
-        'X-Title': 'Adam CAD',
-      },
+      headers: getLlmHeaders(model),
       body: JSON.stringify(requestBody),
     });
 
@@ -784,6 +804,14 @@ Deno.serve(async (req) => {
               const delta = chunk.choices?.[0]?.delta;
               if (!delta) continue;
 
+              // Print raw model output for debugging in the functions serve terminal
+              if ((delta as Record<string, unknown>)?.reasoning_content) {
+                console.log(`[THINK] ${(delta as Record<string, unknown>).reasoning_content}`);
+              }
+              if (delta?.content) {
+                console.log(`[TEXT] ${delta.content}`);
+              }
+
               if (delta.content) {
                 content = {
                   ...content,
@@ -861,7 +889,7 @@ Deno.serve(async (req) => {
               );
 
               // Generate a title from the messages
-              const title = await generateTitleFromMessages(messagesToSend);
+              const title = await generateTitleFromMessages(messagesToSend, model);
 
               // Remove the code from the text (keep any non-code explanation)
               let cleanedText = content.text;
@@ -1015,7 +1043,7 @@ Deno.serve(async (req) => {
             // Note: no `provider.require_parameters` here — code-gen doesn't
             // send tools, so all providers in the pool are eligible.
             const codeRequestBody: OpenRouterRequest = {
-              model,
+              model: useLocalLlm(model) ? (LOCAL_LLM_MODEL || 'local-model') : model,
               messages: [
                 { role: 'system', content: STRICT_CODE_PROMPT },
                 ...codeMessages,
@@ -1025,7 +1053,7 @@ Deno.serve(async (req) => {
             };
 
             // Also apply thinking to code generation if enabled
-            if (thinking) {
+            if (!useLocalLlm(model) && thinking) {
               codeRequestBody.reasoning = {
                 max_tokens: 12000,
               };
@@ -1033,7 +1061,7 @@ Deno.serve(async (req) => {
             }
 
             // Kick off title generation alongside the streamed code.
-            const titlePromise = generateTitleFromMessages(messagesToSend);
+            const titlePromise = generateTitleFromMessages(messagesToSend, model);
 
             let rawCode = '';
             let codeGenFailed = false;
@@ -1046,14 +1074,9 @@ Deno.serve(async (req) => {
             };
 
             try {
-              const codeResponse = await fetch(OPENROUTER_API_URL, {
+              const codeResponse = await fetch(getLlmUrl(model), {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                  'HTTP-Referer': 'https://adam-cad.com',
-                  'X-Title': 'Adam CAD',
-                },
+                headers: getLlmHeaders(model),
                 body: JSON.stringify(codeRequestBody),
               });
 
@@ -1114,7 +1137,15 @@ Deno.serve(async (req) => {
                     );
                   }
 
-                  const deltaContent = chunk.choices?.[0]?.delta?.content;
+                  const delta = chunk.choices?.[0]?.delta;
+                  if (delta?.reasoning) {
+                    console.log(`[THINK] ${delta.reasoning}`);
+                  }
+                  if (delta?.content) {
+                    console.log(`[TEXT] ${delta.content}`);
+                  }
+
+                  const deltaContent = delta?.content;
                   if (typeof deltaContent === 'string' && deltaContent) {
                     rawCode += deltaContent;
                     const now = Date.now();
